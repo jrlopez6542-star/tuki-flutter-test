@@ -1,0 +1,76 @@
+# .github/workflows/build-apk.yml
+# Prueba aislada: compila un APK debug de un proyecto Flutter mínimo
+# y lo publica como artefacto. Sin secretos, sin firma release.
+# Flutter 3.50.0 (estable actual, 2026-11-16). Los 6 archivos binarios
+# del proyecto (gradle-wrapper.jar + 5 ic_launcher.png) NO están en el
+# repo: se restauran aquí desde sus fuentes oficiales (ver paso).
+name: Build APK (prueba)
+
+on:
+  workflow_dispatch:   # ejecución manual desde la pestaña Actions
+  push:
+    branches: [main]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter 3.50.0
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.50.0'
+          channel: stable
+          cache: true
+
+      - name: Mostrar versiones
+        run: |
+          flutter --version
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+      - name: Restaurar binarios de la plantilla
+        run: |
+          # gradle-wrapper.jar: la subida de archivos no acepta binarios;
+          # se baja el wrapper oficial de Gradle 9.5.0 (probado localmente:
+          # ./gradlew --version arranca Gradle 9.5.0 con este jar).
+          curl -sL -o android/gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.5.0/gradle/wrapper/gradle-wrapper.jar
+          # ic_launcher.png (5 densidades): byte-idénticos a la plantilla
+          # del SDK de Flutter 3.50.0 instalado por flutter-action.
+          FLUTTER_DIR=$(dirname $(dirname $(which flutter)))
+          TMPL="$FLUTTER_DIR/packages/flutter_tools/templates/app/android.tmpl/app/src/main/res"
+          for d in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+            cp "$TMPL/mipmap-$d/ic_launcher.png" "android/app/src/main/res/mipmap-$d/ic_launcher.png"
+          done
+          ls -lh android/gradle/wrapper/gradle-wrapper.jar android/app/src/main/res/mipmap-*/ic_launcher.png
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Compilar APK debug
+        run: flutter build apk --debug
+
+      - name: Verificar el APK
+        run: |
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$APK"
+          file "$APK"
+          unzip -t "$APK" | tail -5
+          ls -lh "$APK"
+
+      - name: Publicar APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error
