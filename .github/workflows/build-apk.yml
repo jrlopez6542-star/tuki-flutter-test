@@ -46,9 +46,12 @@ jobs:
           curl -sL -o android/gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.5.0/gradle/wrapper/gradle-wrapper.jar
           # ic_launcher.png (5 densidades): byte-idénticos a la plantilla
           # del SDK de Flutter 3.50.0 instalado por flutter-action.
+          # Las carpetas mipmap-* NO vienen en el checkout: git no guarda
+          # carpetas vacías y el único archivo de cada una era el png.
           FLUTTER_DIR=$(dirname $(dirname $(which flutter)))
           TMPL="$FLUTTER_DIR/packages/flutter_tools/templates/app/android.tmpl/app/src/main/res"
           for d in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p "android/app/src/main/res/mipmap-$d"
             cp "$TMPL/mipmap-$d/ic_launcher.png" "android/app/src/main/res/mipmap-$d/ic_launcher.png"
           done
           ls -lh android/gradle/wrapper/gradle-wrapper.jar android/app/src/main/res/mipmap-*/ic_launcher.png
